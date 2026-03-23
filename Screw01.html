@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production Tracker ใบเกลียว</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600&family=Prompt:wght@300;400;500&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-dark: #0a0f1c;
+            --card-glass: rgba(30, 41, 59, 0.5);
+            --accent-blue: #60a5fa;
+            --accent-green: #34d399;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: #f1f5f9;
+            font-family: 'Plus Jakarta Sans', 'Prompt', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #0a0f1c 70%);
+            min-height: 100vh;
+        }
+
+        .glass-card {
+            background: var(--card-glass);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+        }
+
+        .status-pill {
+            padding: 4px 12px;
+            border-radius: 100px;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        .chart-container {
+            height: 420px;
+            width: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .chart-container {
+                height: 320px;
+            }
+        }
+    </style>
+</head>
+<body class="p-6 md:p-10">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
+            <div>
+                <h1 class="text-2xl font-semibold tracking-tight">Production <span class="text-blue-400 font-light">Trackerใบเกลียว</span></h1>
+                <div class="flex items-center gap-2 mt-1">
+                    <span id="statusDot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                    <p id="statusText" class="text-slate-400 text-[11px] uppercase tracking-[0.2em]">กำลังเชื่อมต่อข้อมูล...</p>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="fetchSheetData(true)" class="glass-card px-5 py-2.5 text-sm hover:bg-white/5 transition-all flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256">
+                        <path d="M224,128a96,96,0,1,1-96-96A96,96,0,0,1,224,128Z" opacity="0.2"></path>
+                        <path d="M128,24a104,104,0,1,0,104,104A104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm45.66-93.66a8,8,0,0,1,0,11.32l-32,32a8,8,0,0,1-11.32-11.32L148.69,136H88a8,8,0,0,1,0-16h60.69l-18.35-18.34a8,8,0,0,1,11.32-11.32Z"></path>
+                    </svg>
+                    <span>อัปเดตข้อมูล</span>
+                </button>
+            </div>
+        </header>
+
+        <div id="dashboardView" class="hidden space-y-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="glass-card p-7 relative overflow-hidden group">
+                    <div class="absolute -right-4 -top-4 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all"></div>
+                    <p class="text-slate-500 text-[11px] font-semibold uppercase tracking-wider">Today Productivity_Actual</p>
+                    <div class="mt-2 flex items-baseline gap-2">
+                        <span id="statActual" class="text-4xl font-semibold">-</span>
+                        <span class="text-slate-500 text-sm">pts</span>
+                    </div>
+                    <div id="badgeActual" class="mt-4 inline-block status-pill bg-slate-800 text-slate-400">รอข้อมูล</div>
+                </div>
+
+                <div class="glass-card p-7 border-b-2 border-emerald-500/30">
+                    <p class="text-slate-500 text-[11px] font-semibold uppercase tracking-wider">ค่าเป้าหมาย (KPI)</p>
+                    <div class="mt-2 flex items-baseline gap-2 text-emerald-400">
+                        <span id="targetValue" class="text-4xl font-semibold">9.84</span>
+                        <span class="text-slate-500 text-sm">pts</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-4 uppercase tracking-widest">Standard Baseline</p>
+                </div>
+
+                <div class="glass-card p-7">
+                    <p class="text-slate-500 text-[11px] font-semibold uppercase tracking-wider">ประสิทธิภาพรวม</p>
+                    <div class="mt-2 flex items-baseline gap-2 text-purple-400">
+                        <span id="statRate" class="text-4xl font-semibold">-</span>
+                        <span class="text-slate-500 text-sm">%</span>
+                    </div>
+                    <p id="statDays" class="text-[10px] text-slate-500 mt-4 uppercase tracking-tighter">-</p>
+                </div>
+            </div>
+
+            <div class="glass-card p-8">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+                    <h3 class="text-base font-medium text-slate-200">แนวโน้มประสิทธิภาพรายวัน</h3>
+                    <div class="flex flex-wrap gap-5 text-[10px] font-bold tracking-widest text-slate-500">
+                        <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> ACTUAL</div>
+                        <div class="flex items-center gap-2"><span class="w-4 h-0.5 bg-emerald-400/50"></span> TARGET</div>
+                        <div class="flex items-center gap-2"><span class="w-4 h-0.5 border-t border-dashed border-slate-600"></span> PLAN</div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="mainChart"></canvas>
+                </div>
+            </div>
+
+            <div class="glass-card overflow-hidden">
+                <div class="px-8 py-5 border-b border-white/5 bg-white/5 flex justify-between items-center">
+                    <h3 class="text-sm font-medium text-slate-300">ตารางข้อมูลรายวัน</h3>
+                    <span id="lastUpdateText" class="text-[10px] text-slate-500 italic">อัปเดตล่าสุด: -</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead>
+                            <tr class="text-slate-500 uppercase tracking-widest border-b border-white/5">
+                                <th class="px-8 py-4 font-medium">วันที่ผลิต</th>
+                                <th class="px-8 py-4 text-right font-medium">จริง (Actual)</th>
+                                <th class="px-8 py-4 text-right font-medium">แผน (Plan)</th>
+                                <th class="px-8 py-4 text-center font-medium">สถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-white/[0.02]"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="initialState" class="py-32 text-center">
+            <div id="loadingIcon" class="w-24 h-24 bg-white/5 rounded-[2rem] flex items-center justify-center mx-auto mb-8 border border-white/5">
+                <div class="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <h2 id="initialTitle" class="text-lg font-medium text-slate-300">กำลังดาวน์โหลดข้อมูล</h2>
+            <p id="initialMsg" class="text-slate-500 mt-2 text-sm max-w-xs mx-auto">กำลังเชื่อมต่อไปยัง Google Sheets...</p>
+        </div>
+    </div>
+
+    <script>
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbya9u9yt0H0XljaLMhasjykxtEYuwLcfAE6UJv83NTB8A8tIsYPO10kT8qJT4YqZ3Sd/exec";
+        const TARGET = 9.84;
+        const AUTO_REFRESH_MS = 60 * 60 * 1000;
+        let chartInstance = null;
+
+        Chart.register(ChartDataLabels);
+
+        window.onload = () => {
+            fetchSheetData(false);
+            setInterval(() => fetchSheetData(false), AUTO_REFRESH_MS);
+        };
+
+        function fetchSheetData(isManual = false) {
+            setLoadingState(true, isManual);
+
+            fetch(WEB_APP_URL + "?t=" + Date.now())
+                .then((res) => res.json())
+                .then((json) => {
+                    console.log("API DATA:", json);
+
+                    if (!json.success || !json.data || json.data.length < 2) {
+                        throw new Error(json.message || "ไม่พบข้อมูลจาก Web App");
+                    }
+
+                    processDataFromAPI(json.data);
+                    setLoadingState(false, isManual);
+                    updateLastUpdateTime();
+                })
+                .catch((err) => {
+                    console.error("Fetch Error:", err);
+                    document.getElementById("initialTitle").innerText = "เกิดข้อผิดพลาด";
+                    document.getElementById("initialMsg").innerText = "ไม่สามารถดึงข้อมูลได้ กรุณาตรวจสอบ Web App URL";
+                    document.getElementById("statusText").innerText = "เชื่อมต่อไม่สำเร็จ";
+                    document.getElementById("statusDot").className = "w-1.5 h-1.5 rounded-full bg-rose-500";
+                });
+        }
+
+        function setLoadingState(isLoading, isManual = false) {
+            const statusDot = document.getElementById("statusDot");
+            const statusText = document.getElementById("statusText");
+
+            if (isLoading) {
+                statusDot.className = "w-1.5 h-1.5 rounded-full bg-slate-500";
+                statusText.innerText = isManual ? "กำลังอัปเดตข้อมูล..." : "กำลังเชื่อมต่อข้อมูล...";
+            } else {
+                statusDot.className = "w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse";
+                statusText.innerText = "ข้อมูลเป็นปัจจุบันแล้ว";
+            }
+        }
+
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const formatted = new Intl.DateTimeFormat("th-TH", {
+                dateStyle: "short",
+                timeStyle: "medium"
+            }).format(now);
+
+            document.getElementById("lastUpdateText").innerText = "อัปเดตล่าสุด: " + formatted;
+        }
+
+        function processDataFromAPI(rows) {
+            const headers = rows[0].map(h => String(h).trim());
+
+            const idxDate = headers.indexOf("วันที่");
+            const idxPlan = headers.indexOf("Productivity_Plan");
+            const idxActual = headers.indexOf("Productivity_Actual");
+
+            if (idxDate === -1 || idxPlan === -1 || idxActual === -1) {
+                throw new Error("ไม่พบหัวคอลัมน์ วันที่ / Productivity_Plan / Productivity_Actual");
+            }
+
+            const data = [];
+
+            for (let i = 1; i < rows.length; i++) {
+                const r = rows[i];
+                const date = String(r[idxDate] || "").trim();
+                const planRaw = String(r[idxPlan] || "").replace(/,/g, "").trim();
+                const actualRaw = String(r[idxActual] || "").replace(/,/g, "").trim();
+
+                const plan = planRaw === "" ? null : parseFloat(planRaw);
+                const actual = actualRaw === "" ? null : parseFloat(actualRaw);
+
+                if (!date) continue;
+
+                data.push({
+                    date,
+                    plan: isNaN(plan) ? null : plan,
+                    actual: isNaN(actual) ? null : actual
+                });
+            }
+
+            data.sort((a, b) => parseDate(a.date) - parseDate(b.date));
+            console.log("DATA AFTER MAP:", data);
+
+            updateDashboard(data);
+        }
+
+        function parseDate(dateStr) {
+            const parts = String(dateStr).split(/[\/\-]/);
+            if (parts.length !== 3) return new Date(dateStr);
+
+            let d, m, y;
+            if (parts[0].length === 4) {
+                y = Number(parts[0]);
+                m = Number(parts[1]);
+                d = Number(parts[2]);
+            } else {
+                d = Number(parts[0]);
+                m = Number(parts[1]);
+                y = Number(parts[2]);
+            }
+
+            return new Date(y, m - 1, d);
+        }
+
+        function updateDashboard(data) {
+            document.getElementById("initialState").classList.add("hidden");
+            document.getElementById("dashboardView").classList.remove("hidden");
+
+            const actualRows = data.filter(d => d.actual !== null && d.actual > 0);
+            const latestRow = actualRows.length ? actualRows[actualRows.length - 1] : null;
+            const latestActual = latestRow ? latestRow.actual : 0;
+            const latestDate = latestRow ? latestRow.date : "-";
+
+            const passCount = actualRows.filter(d => d.actual >= TARGET).length;
+            const passRate = actualRows.length ? ((passCount / actualRows.length) * 100).toFixed(0) : "0";
+
+            document.getElementById("statActual").innerText = latestActual.toFixed(2);
+            document.getElementById("statActual").className =
+                `text-4xl font-semibold ${latestActual >= TARGET ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            document.getElementById("statRate").innerText = passRate;
+            document.getElementById("statDays").innerText = `ล่าสุดวันที่ ${latestDate} | สำเร็จ ${passCount} จาก ${actualRows.length} วัน`;
+            document.getElementById("targetValue").innerText = TARGET.toFixed(2);
+
+            const badge = document.getElementById("badgeActual");
+            badge.innerText = latestActual >= TARGET
+                ? `✓ ล่าสุด ${latestDate}`
+                : `✕ ล่าสุด ${latestDate}`;
+            badge.className =
+                `mt-4 inline-block status-pill ${latestActual >= TARGET ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`;
+
+            renderChart(data);
+            renderTable(data);
+        }
+
+        function renderChart(data) {
+            const ctx = document.getElementById("mainChart").getContext("2d");
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: data.map(d => d.date),
+                    datasets: [
+                        {
+                            label: "Actual",
+                            data: data.map(d => d.actual),
+                            borderColor: "#60a5fa",
+                            borderWidth: 3,
+                            pointRadius: 5,
+                            pointBackgroundColor: "#60a5fa",
+                            pointBorderColor: "#0a0f1c",
+                            pointBorderWidth: 2,
+                            tension: 0.35,
+                            spanGaps: true,
+                            datalabels: {
+                                display: true,
+                                align: "top",
+                                offset: 8,
+                                color: "#94a3b8",
+                                font: { size: 10, weight: "600" },
+                                formatter: v => (v !== null && v > 0) ? v.toFixed(1) : ""
+                            }
+                        },
+                        {
+                            label: "Target",
+                            data: data.map(() => TARGET),
+                            borderColor: "rgba(52, 211, 153, 0.3)",
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            datalabels: { display: false }
+                        },
+                        {
+                            label: "Plan",
+                            data: data.map(d => d.plan),
+                            borderColor: "rgba(148, 163, 184, 0.25)",
+                            borderWidth: 1.5,
+                            borderDash: [6, 4],
+                            pointRadius: 0,
+                            datalabels: { display: false }
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            grid: { color: "rgba(255,255,255,0.03)" },
+                            ticks: { color: "#475569", font: { size: 10 } },
+                            min: 0
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: "#475569", font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById("tableBody");
+            tbody.innerHTML = "";
+
+            data.forEach((row) => {
+                const hasActual = row.actual !== null && row.actual > 0;
+                const isPass = hasActual && row.actual >= TARGET;
+
+                const tr = document.createElement("tr");
+                tr.className = "hover:bg-white/[0.02] transition-colors";
+
+                tr.innerHTML = `
+                    <td class="px-8 py-4 font-medium text-slate-400">${row.date}</td>
+                    <td class="px-8 py-4 text-right font-semibold ${!hasActual ? 'text-slate-600' : (isPass ? 'text-emerald-400' : 'text-rose-400')}">
+                        ${hasActual ? row.actual.toFixed(2) : '-'}
+                    </td>
+                    <td class="px-8 py-4 text-right text-slate-500 font-medium">
+                        ${row.plan !== null ? row.plan.toFixed(2) : '-'}
+                    </td>
+                    <td class="px-8 py-4 text-center">
+                        <span class="status-pill ${!hasActual ? 'bg-slate-800 text-slate-600' : (isPass ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500')}">
+                            ${!hasActual ? 'รอข้อมูล' : (isPass ? 'ผ่าน' : 'ไม่ผ่าน')}
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    </script>
+</body>
+</html>
